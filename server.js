@@ -20,14 +20,20 @@ app.get("/", (req, res) => {
   res.send("Email service running");
 });
 
-/* -------------------- EMAIL TRANSPORTER -------------------- */
+
 const transporter = nodemailer.createTransport({
-  service: "yahoo",
+  host: "smtp.mail.yahoo.com",
+  port: 465,
+  secure: true, // MUST be true for 465
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // Yahoo App Password
+    pass: process.env.EMAIL_PASS,
   },
+  connectionTimeout: 40000,
+  greetingTimeout: 20000,
+  socketTimeout: 40000,
 });
+
 
 // Verify transporter credentials
 transporter.verify((error, success) => {
