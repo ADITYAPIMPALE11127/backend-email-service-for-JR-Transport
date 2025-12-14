@@ -1,7 +1,7 @@
 import express from "express";
-import nodemailer from "nodemailer";
 import cors from "cors";
 import dotenv from "dotenv";
+import SibApiV3Sdk from "sib-api-v3-sdk";
 
 dotenv.config();
 
@@ -9,45 +9,26 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* -------------------- HEALTH / PING ROUTE -------------------- */
+/* -------------------- HEALTH / PING -------------------- */
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
 
-/* -------------------- ROOT TEST ROUTE -------------------- */
+/* -------------------- ROOT -------------------- */
 app.get("/", (req, res) => {
-  res.send("Email service running");
+  res.send("Brevo Email API service running");
 });
 
-/* -------------------- BREVO TRANSPORTER -------------------- */
-const transporter = nodemailer.createTransport({
-  host: process.env.BREVO_SMTP_HOST,
-  port: parseInt(process.env.BREVO_SMTP_PORT, 10),
-  secure: false, // TLS for port 587
-  auth: {
-    user: process.env.BREVO_SMTP_USER,
-    pass: process.env.BREVO_SMTP_PASS,
-  },
-});
-
-// Optional: log env variables to verify
-console.log("🔹 SMTP USER:", process.env.BREVO_SMTP_USER ? "✅ set" : "❌ missing");
-console.log("🔹 SMTP PASS:", process.env.BREVO_SMTP_PASS ? "✅ set" : "❌ missing");
-
-/* -------------------- Verify transporter -------------------- */
-transporter.verify((error) => {
-  if (error) {
-    console.error("❌ Brevo SMTP verification failed:", error);
-  } else {
-    console.log("✅ Brevo SMTP ready to send emails");
-  }
-});
+/* -------------------- BREVO CLIENT -------------------- */
+const defaultClient = SibApiV3Sdk.ApiClient.instance;
+const apiKey = defaultClient.authentications["api-key"];
+apiKey.apiKey = process.env.BREVO_API_KEY;
+const emailApi = new SibApiV3Sdk.TransactionalEmailsApi();
 
 /* -------------------- ENQUIRY ROUTE -------------------- */
 app.post("/api/enquiry", async (req, res) => {
   const { name, email, phone, company, message } = req.body;
 
-  // Backend validation
   if (!name || !phone || !message) {
     return res.status(400).json({
       success: false,
@@ -56,12 +37,12 @@ app.post("/api/enquiry", async (req, res) => {
   }
 
   try {
-    const mailOptions = {
-      from: `"Website Enquiry" <${process.env.BREVO_SMTP_USER}>`,
-      to: "jrtransportco@yahoo.com",
-      replyTo: email || process.env.BREVO_SMTP_USER,
+    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail({
+      to: [{ email: process.env.RECEIVER_EMAIL }],
+      sender: { name: process.env.SENDER_NAME, email: process.env.SENDER_EMAIL },
       subject: "New Enquiry from Website",
-      html: `
+      replyTo: { email: email || process.env.SENDER_EMAIL },
+      htmlContent: `
         <h2>New Enquiry Received</h2>
         <hr />
         <p><strong>Name:</strong> ${name}</p>
@@ -71,28 +52,27 @@ app.post("/api/enquiry", async (req, res) => {
         <p><strong>Message:</strong></p>
         <p>${message}</p>
       `,
-    };
+    });
 
-    // Send email
-    const info = await transporter.sendMail(mailOptions);
-    console.log("📧 Email sent info:", info);
+    const result = await emailApi.sendTransacEmail(sendSmtpEmail);
+    console.log("📧 Email sent info:", result);
 
     res.status(200).json({
       success: true,
       message: "Email sent successfully",
-      emailInfo: info, // optional, remove in production
+      data: result,
     });
   } catch (error) {
     console.error("❌ Email send error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to send email. Check server logs for details.",
-      error: error.message,
+      message: "Failed to send email. Check server logs.",
+      error: error.body || error.message,
     });
   }
 });
 
-/* -------------------- SERVER START -------------------- */
+/* -------------------- START SERVER -------------------- */
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
