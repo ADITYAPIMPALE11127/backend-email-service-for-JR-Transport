@@ -29,10 +29,19 @@ const emailApi = new SibApiV3Sdk.TransactionalEmailsApi();
 app.post("/api/enquiry", async (req, res) => {
   const { name, email, phone, company, message } = req.body;
 
+  // Validate required fields
   if (!name || !phone || !message) {
     return res.status(400).json({
       success: false,
       message: "Missing required fields (name, phone, message)",
+    });
+  }
+
+  // Optional email validation
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid email format",
     });
   }
 
@@ -55,6 +64,7 @@ app.post("/api/enquiry", async (req, res) => {
     });
 
     const result = await emailApi.sendTransacEmail(sendSmtpEmail);
+
     console.log("📧 Email sent info:", result);
 
     res.status(200).json({
@@ -63,11 +73,16 @@ app.post("/api/enquiry", async (req, res) => {
       data: result,
     });
   } catch (error) {
+    // Log full error details
     console.error("❌ Email send error:", error);
+
+    // Extract Brevo response message if available
+    let errorMessage = error.body?.message || error.message || "Unknown error";
+
     res.status(500).json({
       success: false,
-      message: "Failed to send email. Check server logs.",
-      error: error.body || error.message,
+      message: "Failed to send email",
+      error: errorMessage,
     });
   }
 });
