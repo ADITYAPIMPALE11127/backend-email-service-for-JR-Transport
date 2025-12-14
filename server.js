@@ -10,7 +10,6 @@ app.use(cors());
 app.use(express.json());
 
 /* -------------------- HEALTH / PING ROUTE -------------------- */
-/* Used by UptimeRobot to keep server awake */
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
@@ -20,27 +19,27 @@ app.get("/", (req, res) => {
   res.send("Email service running");
 });
 
-
+/* -------------------- BREVO TRANSPORTER -------------------- */
 const transporter = nodemailer.createTransport({
-  host: "smtp.mail.yahoo.com",
-  port: 465,
-  secure: true, // MUST be true for 465
+  host: process.env.BREVO_SMTP_HOST,
+  port: parseInt(process.env.BREVO_SMTP_PORT, 10),
+  secure: false, // TLS for port 587
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.BREVO_SMTP_USER,
+    pass: process.env.BREVO_SMTP_PASS,
   },
-  connectionTimeout: 40000,
-  greetingTimeout: 20000,
-  socketTimeout: 40000,
 });
 
+// Optional: log env variables to verify
+console.log("🔹 SMTP USER:", process.env.BREVO_SMTP_USER ? "✅ set" : "❌ missing");
+console.log("🔹 SMTP PASS:", process.env.BREVO_SMTP_PASS ? "✅ set" : "❌ missing");
 
-// Verify transporter credentials
-transporter.verify((error, success) => {
+/* -------------------- Verify transporter -------------------- */
+transporter.verify((error) => {
   if (error) {
-    console.error("❌ Transporter verification failed:", error);
+    console.error("❌ Brevo SMTP verification failed:", error);
   } else {
-    console.log("✅ Transporter is ready to send emails");
+    console.log("✅ Brevo SMTP ready to send emails");
   }
 });
 
@@ -58,9 +57,10 @@ app.post("/api/enquiry", async (req, res) => {
 
   try {
     const mailOptions = {
-      from: `"Website Enquiry" <${process.env.EMAIL_USER}>`,
+      from: `"Website Enquiry" <${process.env.BREVO_SMTP_USER}>`,
       to: "jrtransportco@yahoo.com",
-      subject: " New Enquiry from Website",
+      replyTo: email || process.env.BREVO_SMTP_USER,
+      subject: "New Enquiry from Website",
       html: `
         <h2>New Enquiry Received</h2>
         <hr />
@@ -73,22 +73,21 @@ app.post("/api/enquiry", async (req, res) => {
       `,
     };
 
-    // Send email and log info
+    // Send email
     const info = await transporter.sendMail(mailOptions);
     console.log("📧 Email sent info:", info);
 
-    // Optional: send info back to frontend for testing
     res.status(200).json({
       success: true,
       message: "Email sent successfully",
-      emailInfo: info, // <-- remove in production
+      emailInfo: info, // optional, remove in production
     });
   } catch (error) {
     console.error("❌ Email send error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to send email. Check server logs for details.",
-      error: error.message, // optional for debugging
+      error: error.message,
     });
   }
 });
