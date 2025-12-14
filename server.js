@@ -54,7 +54,7 @@ app.post("/api/enquiry", async (req, res) => {
     const mailOptions = {
       from: `"Website Enquiry" <${process.env.EMAIL_USER}>`,
       to: "jrtransportco@yahoo.com",
-      subject: "🚚 New Enquiry from Website",
+      subject: " New Enquiry from Website",
       html: `
         <h2>New Enquiry Received</h2>
         <hr />
